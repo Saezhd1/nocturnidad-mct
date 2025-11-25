@@ -1,12 +1,9 @@
-from flask import Flask, render_template, request, session, send_file
-from io import BytesIO
+from flask import Flask, render_template, request
 from src.parser import parse_pdf
-from src.nocturnidad import calcular_nocturnidad_por_dia
+from src.nocturnidad import calcular_nocturnidad_global
 from src.aggregator import agregar_resumen
-from src.pdf_export import exportar_pdf_informe
 
 app = Flask(__name__)
-app.secret_key = "supersecretkey"
 
 @app.route("/")
 def index():
@@ -14,34 +11,29 @@ def index():
 
 @app.route("/upload", methods=["POST"])
 def upload():
-    files = request.files.getlist("pdfs")
-    empleado = request.form.get("empleado") or ""
-    nombre = request.form.get("nombre") or ""
+    file = request.files["file"]
+    empleado = request.form.get("empleado", "")
+    nombre = request.form.get("nombre", "")
 
-    resultados = []
-    for f in files:
-        regs = parse_pdf(f)
-        dias = calcular_nocturnidad_por_dia(regs)
-        resultados.append({"filename": f.filename, "dias": dias})
+    # 1. Parsear PDF
+    registros = parse_pdf(file)
 
-    resumen = agregar_resumen(resultados)
+    # 2. Calcular nocturnidad
+    calc = calcular_nocturnidad_global(registros)
+    resultados = calc["detalle"]  # lista de dicts con fecha, hi, hf, minutos, importe
 
-    session["payload"] = {
-        "empleado": empleado,
-        "nombre": nombre,
-        "resultados": resultados,
-        "resumen": resumen,
-    }
-    return render_template("result.html", empleado=empleado, nombre=nombre,
-                           resultados=resultados, resumen=resumen)
+    # 3. Resumen mensual y global
+    resumen_mensual, resumen_global = agregar_resumen(resultados)
 
-@app.route("/download")
-def download():
-    payload = session.get("payload")
-    if not payload:
-        return "No hay datos para exportar"
-    buffer = exportar_pdf_informe(payload["empleado"], payload["nombre"],
-                                  payload["resultados"], payload["resumen"])
-    return send_file(buffer, as_attachment=True,
-                     download_name="informe_nocturnidad.pdf",
-                     mimetype="application/pdf")
+    # 4. Renderizar plantilla
+    return render_template(
+        "result.html",
+        empleado=empleado,
+        nombre=nombre,
+        resultados=resultados,
+        resumen_mensual=resumen_mensual,
+        resumen_global=resumen_global
+    )
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=10000)
