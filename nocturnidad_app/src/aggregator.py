@@ -1,9 +1,6 @@
 from collections import defaultdict
 
 def agregar_resumen(resultados_por_pdf):
-    """
-    Agrega los resultados diarios en resúmenes por mes y global.
-    """
     resumen = {
         "por_mes": defaultdict(lambda: {"minutos": 0, "importe": 0.0, "dias": 0}),
         "global": {"minutos": 0, "importe": 0.0, "dias": 0}
@@ -16,7 +13,6 @@ def agregar_resumen(resultados_por_pdf):
             fecha = d["fecha"]
 
             if minutos > 0:
-                # Extraer mes/año de la fecha
                 try:
                     mes, anio = fecha.split("/")[1], fecha.split("/")[2]
                     clave = f"{mes}/{anio}"
