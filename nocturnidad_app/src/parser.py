@@ -2,7 +2,7 @@ import pdfplumber
 import re
 
 # Regex estricta para horas válidas HH:MM (00–23)
-HHMM = re.compile(r"\b([01]?\d|2[0-3]):[0-5]\d\b")
+HHMM = re.compile(r"\b(?:[01]?\d|2[0-3]):[0-5]\d\b")
 
 def _in_range(xmid, xr, tol=2):
     return xr[0] - tol <= xmid <= xr[1] + tol
