@@ -1,118 +1,35 @@
-import pdfplumber
 import re
-
-# Regex para horas HH:MM válidas y fecha DD/MM/AAAA
-HHMM = re.compile(r"\b(?:[01]?\d|2[0-3]):[0-5]\d\b")
-FECHA = re.compile(r"\b\d{2}/\d{2}/\d{4}\b")
-
-def _in_range(xmid, xr, tol=2):
-    return xr[0] - tol <= xmid <= xr[1] + tol
-
-def _find_columns(page):
-    words = page.extract_words(use_text_flow=True)
-    fecha_x = hi_x = hf_x = None
-    header_bottom = page.bbox[1] + 40
-
-    for w in words:
-        t = (w.get("text") or "").strip().lower()
-        if t == "fecha":
-            fecha_x = (w["x0"], w["x1"]); header_bottom = max(header_bottom, w["bottom"])
-        elif t == "hi":
-            hi_x = (w["x0"], w["x1"]); header_bottom = max(header_bottom, w["bottom"])
-        elif t == "hf":
-            hf_x = (w["x0"], w["x1"]); header_bottom = max(header_bottom, w["bottom"])
-
-    # Fallback si no encuentra cabeceras
-    if not (fecha_x and hi_x and hf_x):
-        x0_page, x1_page = page.bbox[0], page.bbox[2]
-        width = x1_page - x0_page
-        fecha_x = (x0_page + 0.06 * width, x0_page + 0.22 * width)
-        hi_x    = (x0_page + 0.69 * width, x0_page + 0.81 * width)
-        hf_x    = (x0_page + 0.81 * width, x0_page + 0.95 * width)
-
-    return {"fecha": fecha_x, "hi": hi_x, "hf": hf_x, "header_bottom": header_bottom}
+import pdfplumber
 
 def parse_pdf(file):
     registros = []
-    try:
-        with pdfplumber.open(file) as pdf:
-            last_fecha = None
-            for page in pdf.pages:
-                text_probe = (page.extract_text() or "").lower()
-                # Evitar tablas de totales
-                if "tabla de totalizados" in text_probe and "fecha" not in text_probe:
+
+    with pdfplumber.open(file) as pdf:
+        for page in pdf.pages:
+            text = page.extract_text()
+            if not text:
+                continue
+
+            for line in text.splitlines():
+                # Buscar fecha en formato DD/MM/AAAA
+                fecha_match = re.search(r"\d{2}/\d{2}/\d{4}", line)
+                if not fecha_match:
                     continue
+                fecha = fecha_match.group(0)
 
-                cols = _find_columns(page)
-                words = page.extract_words(x_tolerance=2, y_tolerance=2, use_text_flow=False)
+                # Buscar todas las horas en la línea (ej. 05:00, 15:30)
+                horas = re.findall(r"\d{1,2}:\d{2}", line)
 
-                # Agrupar por línea Y
-                lines = {}
-                for w in words:
-                    if w["top"] <= cols["header_bottom"]:
-                        continue
-                    y_key = round(w["top"], 1)
-                    lines.setdefault(y_key, []).append(w)
+                if len(horas) >= 2:
+                    hi = horas[0]
+                    hf = horas[1]
 
-                for y in sorted(lines.keys()):
-                    row_words = sorted(lines[y], key=lambda k: k["x0"])
-
-                    fecha_tokens, hi_tokens, hf_tokens = [], [], []
-                    for w in row_words:
-                        t = (w.get("text") or "").strip()
-                        xmid = (w["x0"] + w["x1"]) / 2.0
-                        if _in_range(xmid, cols["fecha"]):
-                            fecha_tokens.append(t)
-                        elif _in_range(xmid, cols["hi"]):
-                            hi_tokens.append(t)
-                        elif _in_range(xmid, cols["hf"]):
-                            hf_tokens.append(t)
-
-                    # 1) Capturar fecha estricta en la línea
-                    fecha_raw = " ".join(fecha_tokens).strip()
-                    match_fecha = FECHA.search(fecha_raw)
-                    fecha_val = match_fecha.group(0) if match_fecha else None
-
-                    # Caso especial de subfila (ej. "1" debajo de la fecha)
-                    es_subfila = (not fecha_val) and (len(fecha_tokens) == 1) and fecha_tokens[0].isdigit()
-                    if es_subfila and last_fecha:
-                        fecha_val = last_fecha
-
-                    # Si no hay fecha válida, saltar (evita corrimientos en descansos)
-                    if not fecha_val:
-                        continue
-
-                    last_fecha = fecha_val
-
-                    # 2) Extraer horas completas
-                    hi_raw = " ".join(hi_tokens).strip()
-                    hf_raw = " ".join(hf_tokens).strip()
-                    hi_list = [m.group(0) for m in HHMM.finditer(hi_raw)]
-                    hf_list = [m.group(0) for m in HHMM.finditer(hf_raw)]
-
-                    if not hi_list or not hf_list:
-                        continue
-
-                    # 3) Tramo principal = HI[0] + HF[-1]
                     registros.append({
-                        "fecha": fecha_val,
-                        "hi": hi_list[0],
-                        "hf": hf_list[-1],
-                        "principal": True
+                        "fecha": fecha,
+                        "hi": hi,
+                        "hf": hf,
+                        "principal": line.strip()
                     })
 
-                    # 4) Tramo secundario = HI[1] + HF[0] (si existen)
-                    if len(hi_list) >= 2 and len(hf_list) >= 2:
-                        registros.append({
-                            "fecha": fecha_val,
-                            "hi": hi_list[1],
-                            "hf": hf_list[0],
-                            "principal": False
-                        })
-    except Exception as e:
-        print("[parser] Error al leer PDF:", e)
-
-    print(f"[parser] Registros extraídos: {len(registros)}")
-    for r in registros[:6]:
-        print("[parser] Ej:", r)
+    print("[parser] Registros extraídos:", len(registros))
     return registros
