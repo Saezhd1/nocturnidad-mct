@@ -18,15 +18,13 @@ def parse_pdf(file):
                     hf_cell = row[idx_hf] if len(row) > idx_hf else None
 
                     if hi_cell and hf_cell:
-                        # separar por espacios
                         hi_list = hi_cell.split()
                         hf_list = hf_cell.split()
-                        # emparejar cada HI con cada HF
                         for hi, hf in zip(hi_list, hf_list):
                             registros.append({
                                 "fecha": fecha,
-                                "hi": hi,
-                                "hf": hf
+                                "hi": hi.strip(),
+                                "hf": hf.strip()
                             })
     except Exception as e:
         print("Error al leer PDF:", e)
