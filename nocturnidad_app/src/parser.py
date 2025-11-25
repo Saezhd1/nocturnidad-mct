@@ -1,37 +1,26 @@
 import pdfplumber
+import re
 
 def parse_pdf(file):
     registros = []
     try:
         with pdfplumber.open(file) as pdf:
             for page in pdf.pages:
-                table = page.extract_table()
-                if not table:
-                    continue
+                text = page.extract_text() or ""
+                for line in text.splitlines():
+                    # Buscar fecha dd/mm/yyyy
+                    fecha_m = re.search(r"\b(\d{2}/\d{2}/\d{4})\b", line)
+                    # Buscar todas las horas HH:MM
+                    horas = re.findall(r"\b([0-2]?\d:[0-5]\d)\b", line)
 
-                header = table[0]
-                idx_hi = header.index("HI")
-                idx_hf = header.index("HF")
-
-                # recorrer filas
-                for row in table[1:]:
-                    fecha = row[0]
-                    hi_cell = row[idx_hi] if len(row) > idx_hi else None
-                    hf_cell = row[idx_hf] if len(row) > idx_hf else None
-
-                    # si la fecha está vacía pero la fila es continuación → usar última fecha
-                    if not fecha and registros:
-                        fecha = registros[-1]["fecha"]
-
-                    if hi_cell and hf_cell:
-                        hi_list = hi_cell.split()
-                        hf_list = hf_cell.split()
-                        # emparejar cada HI con cada HF
-                        for hi, hf in zip(hi_list, hf_list):
+                    if fecha_m and len(horas) >= 2:
+                        fecha = fecha_m.group(1)
+                        # Emparejar horas de dos en dos
+                        for i in range(0, len(horas)-1, 2):
                             registros.append({
-                                "fecha": fecha.strip(),
-                                "hi": hi.strip(),
-                                "hf": hf.strip()
+                                "fecha": fecha,
+                                "hi": horas[i],
+                                "hf": horas[i+1]
                             })
     except Exception as e:
         print("Error al leer PDF:", e)
