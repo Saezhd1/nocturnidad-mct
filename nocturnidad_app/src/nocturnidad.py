@@ -1,82 +1,51 @@
 from datetime import datetime, timedelta
 
-def _parse_hhmm(s):
-    """
-    Convierte una cadena HH:MM en datetime.
-    Devuelve None si el formato no es válido.
-    """
-    try:
-        return datetime.strptime(s, "%H:%M")
-    except Exception:
-        return None
+# Definir rango nocturno: de 22:00 a 06:00
+NOCTURNIDAD_INICIO = 22  # 22:00
+NOCTURNIDAD_FIN = 6      # 06:00
+VALOR_MINUTO = 0.5       # ejemplo: 0.5 €/minuto
 
-def calcular_nocturnidad_por_dia(registros):
-    """
-    Calcula minutos de nocturnidad para una lista de tramos de un día.
-    Cada tramo es un dict con 'hi' y 'hf' (HH:MM).
-    """
-    minutos_total = 0
-    tramos_validos = []
+def calcular_nocturnidad_global(registros):
+    detalle = []
+    total_minutos = 0
+    total_importe = 0.0
 
     for r in registros:
-        hi_dt = _parse_hhmm(r["hi"])
-        hf_dt = _parse_hhmm(r["hf"])
-        if not hi_dt or not hf_dt:
+        try:
+            hi = datetime.strptime(r["hi"], "%H:%M")
+            hf = datetime.strptime(r["hf"], "%H:%M")
+        except Exception:
             continue
 
-        # Evitar intervalos negativos o vacíos
-        if hi_dt >= hf_dt:
-            continue
+        # Si la hora final es menor que la inicial, significa que cruza medianoche
+        if hf <= hi:
+            hf += timedelta(days=1)
 
-        # Franja nocturna: 22:00 del mismo día → 06:00 del día siguiente
-        noct_ini = hi_dt.replace(hour=22, minute=0)
-        noct_fin = hi_dt.replace(hour=6, minute=0) + timedelta(days=1)
+        minutos_nocturnos = 0
 
-        # Calcular solapamiento
-        inicio = max(hi_dt, noct_ini)
-        fin = min(hf_dt, noct_fin)
+        # Iterar minuto a minuto para comprobar si cae en nocturnidad
+        actual = hi
+        while actual < hf:
+            hora = actual.hour
+            if hora >= NOCTURNIDAD_INICIO or hora < NOCTURNIDAD_FIN:
+                minutos_nocturnos += 1
+            actual += timedelta(minutes=1)
 
-        if inicio < fin:
-            minutos = int((fin - inicio).total_seconds() / 60)
-            minutos_total += minutos
-            tramos_validos.append({**r, "minutos": minutos})
+        importe = minutos_nocturnos * VALOR_MINUTO
 
-    return minutos_total, tramos_validos
+        detalle.append({
+            "fecha": r["fecha"],
+            "hi": r["hi"],
+            "hf": r["hf"],
+            "minutos": minutos_nocturnos,
+            "importe": round(importe, 2)
+        })
 
-def calcular_nocturnidad_global(lista_registros):
-    """
-    Calcula nocturnidad para todos los registros de un mes.
-    Devuelve total minutos, importe y detalle por día.
-    """
-    resumen = {}
-    total_minutos = 0
-    total_dias = 0
+        total_minutos += minutos_nocturnos
+        total_importe += importe
 
-    for r in lista_registros:
-        fecha = r["fecha"]
-        if fecha not in resumen:
-            resumen[fecha] = []
-        resumen[fecha].append(r)
-
-    detalle = []
-    for fecha, regs in resumen.items():
-        minutos, tramos = calcular_nocturnidad_por_dia(regs)
-        if minutos > 0:
-            total_minutos += minutos
-            total_dias += 1
-            for t in tramos:
-                detalle.append({
-                    "fecha": fecha,
-                    "hi": t["hi"],
-                    "hf": t["hf"],
-                    "minutos": t["minutos"],
-                    "importe": round(t["minutos"] * 0.05, 2)  # tarifa base
-                })
-
-    total_importe = round(total_minutos * 0.05, 2)
     return {
         "detalle": detalle,
         "total_minutos": total_minutos,
-        "total_importe": total_importe,
-        "total_dias": total_dias
+        "total_importe": round(total_importe, 2)
     }
