@@ -1,11 +1,12 @@
-import os
-from flask import Flask, render_template, request, redirect, url_for, send_file, session
+from flask import Flask, render_template, request, session, send_file
+from io import BytesIO
 from src.parser import parse_pdf
 from src.nocturnidad import calcular_nocturnidad_por_dia
+from src.aggregator import agregar_resumen
 from src.pdf_export import exportar_pdf_informe
 
 app = Flask(__name__)
-app.secret_key = "supersecretkey"  # cámbialo por algo seguro en producción
+app.secret_key = "supersecretkey"
 
 @app.route("/")
 def index():
@@ -14,24 +15,16 @@ def index():
 @app.route("/upload", methods=["POST"])
 def upload():
     files = request.files.getlist("pdfs")
-    empleado = request.form.get("empleado")
-    nombre = request.form.get("nombre")
+    empleado = request.form.get("empleado") or ""
+    nombre = request.form.get("nombre") or ""
 
     resultados = []
-    resumen = {"por_mes": {}, "global": {"minutos": 0, "importe": 0, "dias": 0}}
-
     for f in files:
-        registros = parse_pdf(f)
-        calculado = calcular_nocturnidad_por_dia(registros)
-        resultados.append({"filename": f.filename, "dias": calculado})
+        regs = parse_pdf(f)
+        dias = calcular_nocturnidad_por_dia(regs)
+        resultados.append({"filename": f.filename, "dias": dias})
 
-        for d in calculado:
-            minutos = d["minutos_nocturnos"]
-            importe = float(d["importe"])
-            if minutos > 0:
-                resumen["global"]["minutos"] += minutos
-                resumen["global"]["importe"] += importe
-                resumen["global"]["dias"] += 1
+    resumen = agregar_resumen(resultados)
 
     session["payload"] = {
         "empleado": empleado,
@@ -39,7 +32,6 @@ def upload():
         "resultados": resultados,
         "resumen": resumen,
     }
-
     return render_template("result.html", empleado=empleado, nombre=nombre,
                            resultados=resultados, resumen=resumen)
 
@@ -47,20 +39,9 @@ def upload():
 def download():
     payload = session.get("payload")
     if not payload:
-        return redirect(url_for("index"))
-
-    buffer = exportar_pdf_informe(
-        empleado=payload["empleado"],
-        nombre=payload["nombre"],
-        resultados=payload["resultados"],
-        resumen=payload["resumen"]
-    )
-    buffer.seek(0)
-
-    return send_file(buffer,
-                     mimetype="application/pdf",
-                     as_attachment=True,
-                     download_name=f"informe_{payload['empleado']}.pdf")
-
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
+        return "No hay datos para exportar"
+    buffer = exportar_pdf_informe(payload["empleado"], payload["nombre"],
+                                  payload["resultados"], payload["resumen"])
+    return send_file(buffer, as_attachment=True,
+                     download_name="informe_nocturnidad.pdf",
+                     mimetype="application/pdf")
