@@ -85,13 +85,13 @@ def exportar_pdf_informe(empleado, nombre, resultados, resumen):
 
     # Explicación final
     explicacion = """
-    Este informe calcula los minutos de nocturnidad según los tramos definidos en el ACTA acuerdo de nocturnidad emitido por:
-    JUZGADO DE LO SOCIAL Nº4 de S/C de Tenerife
-    Procedimiento: Ejecución de títulos judiciales
-    Nº Procedimiento 0000055/2025<br/>
+    Este informe calcula los minutos de nocturnidad según los tramos definidos en el ACTA acuerdo de nocturnidad emitido por:<br/>
+    <b>JUZGADO DE LO SOCIAL Nº4 de S/C de Tenerife</b><br/>
+    <b>Procedimiento:</b> Ejecución de títulos judiciales<br/>
+    <b>Nº Procedimiento:</b> 0000055/2025<br/><br/>
     <b>Importe por minuto:</b><br/>
-    - Desde el 30/03/2022 Hasta el 25/04/2025: 0,05 € (1h=3€)<br/>
-    - Desde el 26/04/2025: 0,062 € (1h=3,72€)<br/><br/>
+    - Desde el 30/03/2022 Hasta el 25/04/2025: 0,05 € (1h = 3 €)<br/>
+    - Desde el 26/04/2025: 0,062 € (1h = 3,72 €)<br/><br/>
     <b>Tramos nocturnos considerados:</b><br/>
     - 22:00 a 00:59<br/>
     - 04:00 a 06:00
@@ -100,3 +100,4 @@ def exportar_pdf_informe(empleado, nombre, resultados, resumen):
 
     doc.build(story, onFirstPage=pie_de_pagina, onLaterPages=pie_de_pagina)
     return buffer
+
