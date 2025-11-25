@@ -1,81 +1,54 @@
-from datetime import time, timedelta
-from .utils import construir_dt, minutos_solape, tarifa_por_fecha
-
-def _time_from_str(s):
-    hh, mm = s.split(':')
-    return time(int(hh), int(mm))
-
-def _split_pair(pair_str):
-    # "HH:MM HH:MM" -> (time1, time2)
-    a, b = pair_str.strip().split()
-    return _time_from_str(a), _time_from_str(b)
-
-def _franjas_dt(fecha):
-    """
-    Construye las franjas nocturnas para una fecha dada:
-    - Franja 1: 22:00 → 00:59 (cruza medianoche)
-    - Franja 2: 04:00 → 06:00 (mismo día)
-    """
-    f1_ini = time(22, 0)
-    f1_fin = time(0, 59)
-    f2_ini = time(4, 0)
-    f2_fin = time(6, 0)
-
-    # Franja 1 cruza medianoche: inicio en fecha, fin en fecha+1
-    f1_ini_dt = construir_dt(fecha, f1_ini)
-    f1_fin_dt = construir_dt(fecha, f1_fin) + timedelta(days=1)
-
-    # Franja 2 en el mismo día
-    f2_ini_dt = construir_dt(fecha, f2_ini)
-    f2_fin_dt = construir_dt(fecha, f2_fin)
-
-    return [
-        (f1_ini_dt, f1_fin_dt),
-        (f2_ini_dt, f2_fin_dt)
-    ]
+from datetime import datetime
 
 def calcular_nocturnidad_por_dia(registros):
     """
-    Calcula los minutos nocturnos y el importe por cada día.
-    registros: lista de dicts con {'fecha': date, 'hi': str, 'hf': str}
+    Calcula minutos nocturnos e importe por día según HI/HF.
     """
     resultados = []
     for r in registros:
-        fecha = r['fecha']
-        tarifa = tarifa_por_fecha(fecha)
-        minutos = 0
+        try:
+            hi = datetime.strptime(r["hi"], "%H:%M")
+            hf = datetime.strptime(r["hf"], "%H:%M")
+        except Exception:
+            continue
 
-        tramos = []
-        if r.get('hi'):
-            try:
-                a, b = _split_pair(r['hi'])
-                tramos.append((a, b))
-            except Exception:
-                pass
-        if r.get('hf'):
-            try:
-                a, b = _split_pair(r['hf'])
-                tramos.append((a, b))
-            except Exception:
-                pass
+        minutos_nocturnos = 0
 
-        franjas_dt = _franjas_dt(fecha)
+        # Tramos nocturnos: 22:00–00:59 y 04:00–06:00
+        tramos = [
+            (datetime.strptime("22:00", "%H:%M"), datetime.strptime("23:59", "%H:%M")),
+            (datetime.strptime("00:00", "%H:%M"), datetime.strptime("00:59", "%H:%M")),
+            (datetime.strptime("04:00", "%H:%M"), datetime.strptime("06:00", "%H:%M")),
+        ]
 
-        for (t_ini, t_fin) in tramos:
-            # tramo puede cruzar medianoche si t_fin < t_ini
-            tramo_ini_dt = construir_dt(fecha, t_ini)
-            tramo_fin_dt = construir_dt(fecha, t_fin)
-            if t_fin < t_ini:
-                # cruzó medianoche → sumamos un día al fin
-                tramo_fin_dt = tramo_fin_dt + timedelta(days=1)
+        for inicio, fin in tramos:
+            if hi <= fin and hf >= inicio:
+                overlap_start = max(hi, inicio)
+                overlap_end = min(hf, fin)
+                if overlap_start < overlap_end:
+                    minutos_nocturnos += int((overlap_end - overlap_start).total_seconds() / 60)
 
-            for (f_ini, f_fin) in franjas_dt:
-                minutos += minutos_solape(tramo_ini_dt, tramo_fin_dt, f_ini, f_fin)
+        # Tarifa: 0.05 €/min hasta 25/04/2025, luego 0.062 €/min
+        fecha = r["fecha"]
+        try:
+            fecha_dt = datetime.strptime(fecha, "%d/%m/%Y")
+        except Exception:
+            fecha_dt = datetime.today()
 
-        importe = round(minutos * tarifa, 2)
+        if fecha_dt <= datetime(2025, 4, 25):
+            tarifa = 0.05
+        else:
+            tarifa = 0.062
+
+        importe = minutos_nocturnos * tarifa
+
         resultados.append({
-            'fecha': fecha.strftime("%d/%m/%Y"),
-            'minutos_nocturnos': minutos,
-            'importe': f"{importe:.2f}"
+            "fecha": fecha,
+            "hi": r["hi"],
+            "hf": r["hf"],
+            "minutos_nocturnos": minutos_nocturnos,
+            "importe": f"{importe:.2f}"
         })
+
     return resultados
+
