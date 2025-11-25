@@ -1,6 +1,5 @@
 from datetime import datetime, timedelta
 
-# Definir rango nocturno: de 22:00 a 06:00
 NOCTURNIDAD_INICIO = 22  # 22:00
 NOCTURNIDAD_FIN = 6      # 06:00
 VALOR_MINUTO = 0.5       # ejemplo: 0.5 €/minuto
@@ -14,20 +13,18 @@ def calcular_nocturnidad_global(registros):
         try:
             hi = datetime.strptime(r["hi"], "%H:%M")
             hf = datetime.strptime(r["hf"], "%H:%M")
-        except Exception:
+        except Exception as e:
+            print("[nocturnidad] error parseando hora:", r, e)
             continue
 
-        # Si la hora final es menor que la inicial, significa que cruza medianoche
+        # Si la hora final es menor o igual que la inicial, cruza medianoche
         if hf <= hi:
             hf += timedelta(days=1)
 
         minutos_nocturnos = 0
-
-        # Iterar minuto a minuto para comprobar si cae en nocturnidad
         actual = hi
         while actual < hf:
-            hora = actual.hour
-            if hora >= NOCTURNIDAD_INICIO or hora < NOCTURNIDAD_FIN:
+            if actual.hour >= NOCTURNIDAD_INICIO or actual.hour < NOCTURNIDAD_FIN:
                 minutos_nocturnos += 1
             actual += timedelta(minutes=1)
 
@@ -44,6 +41,7 @@ def calcular_nocturnidad_global(registros):
         total_minutos += minutos_nocturnos
         total_importe += importe
 
+    print("[nocturnidad] detalle calculado:", detalle)
     return {
         "detalle": detalle,
         "total_minutos": total_minutos,
