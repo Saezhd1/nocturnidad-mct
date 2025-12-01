@@ -1,16 +1,19 @@
 import pdfplumber
+import re
 
 def _in_range(xmid, xr, tol=2):
     return xr[0] - tol <= xmid <= xr[1] + tol
 
+def es_fecha_valida(texto):
+    """
+    Comprueba si el texto tiene formato de fecha dd/mm/aa o dd-mm-aaaa.
+    """
+    return bool(re.match(r"\d{1,2}[/-]\d{1,2}[/-]\d{2,4}", texto))
+
 def _find_columns(page):
-    """
-    Encuentra rangos X para columnas clave. Prioriza cabeceras reales; si falla, usa rangos fijos
-    ajustados a este modelo de TITSA.
-    """
     words = page.extract_words(use_text_flow=True)
     fecha_x = hi_x = hf_x = None
-    header_bottom = page.bbox[1] + 40  # altura aproximada bajo cabecera
+    header_bottom = page.bbox[1] + 40
 
     for w in words:
         t = (w.get("text") or "").strip().lower()
@@ -21,7 +24,6 @@ def _find_columns(page):
         elif t == "hf":
             hf_x = (w["x0"], w["x1"]); header_bottom = max(header_bottom, w["bottom"])
 
-    # Fallback “hardcodeado” para este modelo si no encuentra cabeceras
     if not (fecha_x and hi_x and hf_x):
         x0_page, x1_page = page.bbox[0], page.bbox[2]
         width = x1_page - x0_page
@@ -39,15 +41,14 @@ def parse_pdf(file):
                 cols = _find_columns(page)
                 words = page.extract_words(x_tolerance=2, y_tolerance=2, use_text_flow=False)
 
-                # Agrupar por línea (clave: y redondeada)
+                # Agrupar por bloques verticales más amplios (ej. cada 5px)
                 lines = {}
                 for w in words:
                     if w["top"] <= cols["header_bottom"]:
                         continue
-                    y_key = round(w["top"], 5)
+                    y_key = int(w["top"] // 5)  # agrupación más robusta
                     lines.setdefault(y_key, []).append(w)
 
-                # Ordenar por vertical
                 for y in sorted(lines.keys()):
                     row_words = sorted(lines[y], key=lambda k: k["x0"])
 
@@ -62,27 +63,24 @@ def parse_pdf(file):
                         elif _in_range(xmid, cols["hf"]):
                             hf_tokens.append(t)
 
-                    # Consolidar
                     fecha_val = " ".join(fecha_tokens).strip()
                     hi_raw = " ".join(hi_tokens).strip()
                     hf_raw = " ".join(hf_tokens).strip()
 
-                    # Filtrar si no hay horas en ninguna columna
+                    # 🚫 Si no hay fecha válida, descartar
+                    if not fecha_val or not es_fecha_valida(fecha_val):
+                        continue
+
                     if not (hi_raw or hf_raw):
                         continue
 
-                    # Extraer horas HH:MM y descartar ruidos
                     hi_list = [x for x in hi_raw.split() if ":" in x and x.count(":") == 1]
                     hf_list = [x for x in hf_raw.split() if ":" in x and x.count(":") == 1]
 
                     if not hi_list or not hf_list:
                         continue
 
-                    # Heredar fecha solo si la fila es válida
-                    if not fecha_val:
-                        continue
-
-                    # Regla Daniel:
+                    # Regla Daniel
                     principal_hi = hi_list[0]
                     principal_hf = hf_list[-1]
                     registros.append({
@@ -99,7 +97,6 @@ def parse_pdf(file):
                             "hf": hf_list[0],
                             "principal": False
                         })
-                        
     except Exception as e:
         print("[parser] Error al leer PDF:", e)
 
@@ -107,6 +104,3 @@ def parse_pdf(file):
     for r in registros[:6]:
         print("[parser] Ej:", r)
     return registros
-
-
-
