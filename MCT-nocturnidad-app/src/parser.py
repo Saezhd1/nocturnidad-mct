@@ -35,21 +35,18 @@ def parse_pdf(file):
     registros = []
     try:
         with pdfplumber.open(file) as pdf:
-            
             for page in pdf.pages:
                 cols = _find_columns(page)
-                # Palabras con tolerancias pequeñas para que se agrupen por línea
                 words = page.extract_words(x_tolerance=2, y_tolerance=2, use_text_flow=False)
 
-                # Agrupar por línea (clave: y redondeada)
+                # Agrupar por línea con tolerancia más amplia
                 lines = {}
                 for w in words:
                     if w["top"] <= cols["header_bottom"]:
                         continue
-                    y_key = int(w["top"] // 5)
+                    y_key = int(w["top"] // 5)  # agrupa cada 5px
                     lines.setdefault(y_key, []).append(w)
 
-                # Ordenar por vertical
                 for y in sorted(lines.keys()):
                     row_words = sorted(lines[y], key=lambda k: k["x0"])
 
@@ -64,52 +61,38 @@ def parse_pdf(file):
                         elif _in_range(xmid, cols["hf"]):
                             hf_tokens.append(t)
 
-                    # Consolidar
                     fecha_val = " ".join(fecha_tokens).strip()
                     hi_raw = " ".join(hi_tokens).strip()
                     hf_raw = " ".join(hf_tokens).strip()
 
-                    # Filtrar si no hay horas en ninguna columna
-                    if not (hi_raw or hf_raw): 
-                        registros.append({
-                            "fecha": fecha_val,
-                            "hi": "",
-                            "hf": "",
-                            "principal": True
-                        })
-                        continue
-
-                    # Extraer horas HH:MM y descartar ruidos (00, números sueltos)
+                    # Siempre guardar la fila, aunque no tenga horas válidas
                     hi_list = [x for x in hi_raw.split() if ":" in x and x.count(":") == 1]
                     hf_list = [x for x in hf_raw.split() if ":" in x and x.count(":") == 1]
 
-                    if not hi_list or not hf_list:
+                    if hi_list and hf_list:
+                        # Regla Daniel: principal y secundario
+                        principal_hi = hi_list[0]
+                        principal_hf = hf_list[-1]
+                        registros.append({
+                            "fecha": fecha_val,
+                            "hi": principal_hi,
+                            "hf": principal_hf,
+                            "principal": True
+                        })
+                        if len(hi_list) >= 2 and len(hf_list) >= 2:
+                            registros.append({
+                                "fecha": fecha_val,
+                                "hi": hi_list[1],
+                                "hf": hf_list[0],
+                                "principal": False
+                            })
+                    else:
+                        # Guardar fila aunque no tenga horas válidas
                         registros.append({
                             "fecha": fecha_val,
                             "hi": hi_raw,
                             "hf": hf_raw,
                             "principal": True
-                        })
-                        continue
-
-                    # Regla Daniel:
-                    # - Principal: HI arriba (índice 0) con HF abajo (último)
-                    # - Secundario: si hay dos, HI abajo (índice 1) con HF arriba (índice 0)
-                    principal_hi = hi_list[0]
-                    principal_hf = hf_list[-1]
-                    registros.append({
-                        "fecha": fecha_val,
-                        "hi": principal_hi,
-                        "hf": principal_hf,
-                        "principal": True
-                    })
-
-                    if len(hi_list) >= 2 and len(hf_list) >= 2:
-                        registros.append({
-                            "fecha": fecha_val,
-                            "hi": hi_list[1],
-                            "hf": hf_list[0],
-                            "principal": False
                         })
     except Exception as e:
         print("[parser] Error al leer PDF:", e)
@@ -118,5 +101,3 @@ def parse_pdf(file):
     for r in registros[:6]:
         print("[parser] Ej:", r)
     return registros
-
-
