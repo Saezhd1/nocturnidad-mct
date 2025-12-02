@@ -1,16 +1,16 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Cálculo de nocturnidad</title>
+    <title>MCT Herramienta web Cálculo de nocturnidad</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
 </head>
 <body>
-    <h1>Cálculo de nocturnidad</h1>
+    <h1>MCT Cálculo de nocturnidad</h1>
     <form action="{{ url_for('upload') }}" method="post" enctype="multipart/form-data">
-        <label for="empleado">Número de empleado:</label>
+        <label for="empleado">Código de empleado:</label>
         <input type="text" id="empleado" name="empleado" required><br><br>
 
-        <label for="nombre">Nombre:</label>
+        <label for="nombre">Nombre completo:</label>
         <input type="text" id="nombre" name="nombre" required><br><br>
 
         <label for="pdfs">Selecciona uno o más PDFs:</label>
@@ -20,3 +20,4 @@
     </form>
 </body>
 </html>
+
