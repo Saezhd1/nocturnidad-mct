@@ -45,3 +45,4 @@ def download():
     return send_file(buffer, as_attachment=True,
                      download_name="informe_nocturnidad.pdf",
                      mimetype="application/pdf")
+
