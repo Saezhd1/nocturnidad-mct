@@ -35,6 +35,7 @@ def _find_columns(page):
 
 def parse_pdf(file):
     registros = []
+    last_fecha = None
     try:
         with pdfplumber.open(file) as pdf:
             for page_num, page in enumerate(pdf.pages, start=1):
@@ -73,11 +74,13 @@ def parse_pdf(file):
                     hi_raw = " ".join(hi_tokens).strip()
                     hf_raw = " ".join(hf_tokens).strip()
 
-                    print(f"[parser] Tokens -> fecha:'{fecha_val}', hi:'{hi_raw}', hf:'{hf_raw}'")
+                    # Si hay fecha explícita, actualiza last_fecha
+                    if fecha_val:
+                        last_fecha = fecha_val
                     
-                    # ⚠️ Nuevo criterio: solo procesar si hay fecha explícita
-                    if not fecha_val:
-                        continue
+                    # Usa la última fecha conocida si no hay fecha en esta línea
+                    if not fecha_val and last_fecha:
+                        fecha_val = last_fecha
 
                     # Filtrar si no hay horas en ninguna columna
                     if not (hi_raw or hf_raw): 
@@ -135,6 +138,7 @@ def parse_multiple_pdfs(files):
     for r in registros[:6]:
         print("[parser] Ej:", r)
     return registros
+
 
 
 
