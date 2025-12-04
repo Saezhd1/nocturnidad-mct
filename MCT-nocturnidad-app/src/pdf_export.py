@@ -1,4 +1,3 @@
-
 from datetime import datetime
 from io import BytesIO
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
@@ -178,6 +177,7 @@ def exportar_pdf_informe(empleado, nombre, resultados, resumen):
     doc.build(story)
     buffer.seek(0)
     return buffer
+
 
 
 
