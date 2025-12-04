@@ -1,4 +1,5 @@
-from reportlab.lib.pagesizes import A4from datetime import datetime
+
+from datetime import datetime
 from io import BytesIO
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
 from reportlab.lib import colors
@@ -177,6 +178,7 @@ def exportar_pdf_informe(empleado, nombre, resultados, resumen):
     doc.build(story)
     buffer.seek(0)
     return buffer
+
 
 
 
