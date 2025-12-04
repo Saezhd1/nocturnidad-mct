@@ -73,8 +73,13 @@ def calcular_nocturnidad_por_dia(registros):
             "minutos_nocturnos": minutos,
             "importe": f"{minutos * tarifa:.2f}",
             "principal": r.get("principal", True)
+            "hi_dt": hi_dt         # guardamos datetime para ordenar
         })
+    
+    🔎 Ordenar primero por fecha y luego por hora de inicio
+    resultados.sort(key=lambda d: (d["fecha"], d["hi_dt"] or datetime.min))
     return resultados
+
 
 
 
